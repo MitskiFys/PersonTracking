@@ -3,8 +3,8 @@
 #include <opencv2/core/base.hpp>
 
 ObjDetect* ObjDetect::_instance = nullptr;
-
-
+static const std::string kWinName = "Deep learning object detection in OpenCV";
+static float confThreshold = 0.5;
 ObjDetect* ObjDetect::Instance()
 {
 	if (_instance)
@@ -18,12 +18,13 @@ ObjDetect* ObjDetect::Instance()
 	}
 }
 
-void ObjDetect::createInstance(pt::QueueFPS<pt::detectedBounds>& bounds)
+ObjDetect* ObjDetect::createInstance(pt::QueueFPS<pt::detectedBounds>& bounds)
 {
 	if (!_instance)
 	{
 		_instance = new ObjDetect(bounds);
 	}
+    return _instance;
 }
 
 void ObjDetect::setInput(int camera)
@@ -33,6 +34,8 @@ void ObjDetect::setInput(int camera)
 	{
 		assert(false);
 	}
+    videcapture.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
+    videcapture.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
 }
 
 void ObjDetect::setInput(const std::string& filePath)
@@ -69,7 +72,9 @@ void ObjDetect::setImageHeight(const int height)
 void ObjDetect::initNet(const std::string modelFilePath, const std::string configFilePath, const int backend, const int target)
 {
 	net = cv::dnn::readNet(configFilePath, modelFilePath);
+    this->backend = backend;
 	net.setPreferableBackend(backend);
+    this->target = target;
 	net.setPreferableTarget(target);
 	outNames = net.getUnconnectedOutLayersNames();
 }
@@ -79,6 +84,23 @@ void ObjDetect::setFps(const int fps)
 	fpsDelay = 1000 / fps;
 }
 
+void callback(int pos, void*)
+{
+    confThreshold = pos * 0.01f;
+}
+
+void ObjDetect::start()
+{
+    //cv::startWindowThread();
+    cv::namedWindow(kWinName, cv::WINDOW_AUTOSIZE);
+    int initialConf = (int)(confThreshold * 100);
+    cv::createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
+    process = true;
+    threadPool.push_back(std::thread(&ObjDetect::processingVideoCapture, this));
+    threadPool.push_back(std::thread(&ObjDetect::processingObjecting, this));
+    postprocessing();
+}
+
 ObjDetect::ObjDetect(pt::QueueFPS<pt::detectedBounds>& bounds):
 	process {false},
 	mean(0,0,0,0),
@@ -86,16 +108,26 @@ ObjDetect::ObjDetect(pt::QueueFPS<pt::detectedBounds>& bounds):
 	imageHeight(416),
 	imageWidth(416),
 	scale(1.0 / 255.0),
-    confThreshold(0.5),
     nmsThreshold(0.4)
 {
 	this->bounds = &bounds;
 	setFps(30);
 }
 
+void ObjDetect::deleteInstance()
+{
+    delete _instance;
+}
+
 ObjDetect::~ObjDetect()
 {
-
+    for (auto& thread : threadPool)
+    {
+        if (thread.joinable())
+        {
+            thread.join();
+        }
+    }
 }
 
 void ObjDetect::processingVideoCapture()
@@ -103,7 +135,14 @@ void ObjDetect::processingVideoCapture()
 	cv::Mat frame;
 	while (process)
 	{
-		videcapture >> frame;
+        try
+        {
+		    videcapture >> frame;
+        }
+        catch (std::exception exp)
+        {
+            std::cout << exp.what() << std::endl;
+        }
 		if (!frame.empty())
 		{
 			framesQueue.push(frame.clone());
@@ -135,7 +174,7 @@ void ObjDetect::processingObjecting()
         if (!frame.empty())
         {
 			preprocessing(frame, net, cv::Size(imageWidth, imageHeight), scale, mean, swapRB);
-
+            processedFramesQueue.push(frame);
 			std::vector<cv::Mat> outs;
 			net.forward(outs, outNames);
 			predictionsQueue.push(outs);
@@ -184,7 +223,7 @@ void ObjDetect::postprocessing()
             label = cv::format("Skipped frames: %d", framesQueue.counter - predictionsQueue.counter);
             putText(frame, label, cv::Point(0, 45), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0));
         }
-        imshow(kWinName, frame);
+        cv::imshow(kWinName, frame);
     }
 }
 
