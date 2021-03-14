@@ -8,27 +8,31 @@ namespace pt
 {
     struct detectedBounds
     {
-        detectedBounds(int x, int y, int width, int height, cv::Mat person) :
-            x(x),
-            y(y),
-            width(width),
-            height(height),
-            person(person)
+        detectedBounds(cv::Mat frame) :
+            frame(frame)
         {
-            id = 0;
+
         }
 
-        int getId() { return id; }
-        void setId(int id) { this->id = id; }
+        void setMapBoxes(std::map<int, cv::Rect_<float>> boxes)
+        {
+            this->boxes = boxes;
+        }
+
+        std::map<int, cv::Rect_<float>> getMapWithBoxes()
+        {
+            return boxes;
+        }
+
+        cv::Mat& getFrame()
+        {
+            return frame;
+        }
 
     private:
 
-        int x;
-        int y;
-        int height;
-        int width;
-        cv::Mat person;
-        int id;
+        std::map<int, cv::Rect_<float>> boxes;
+        cv::Mat frame;
     };
 
     template <typename T>

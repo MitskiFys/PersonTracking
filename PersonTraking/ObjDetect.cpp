@@ -4,7 +4,9 @@
 
 ObjDetect* ObjDetect::_instance = nullptr;
 static const std::string kWinName = "Deep learning object detection in OpenCV";
-static float confThreshold = 0.5;
+static float confThreshold = 0.3;
+const int width = 416;
+const int height = 416;
 ObjDetect* ObjDetect::Instance()
 {
 	if (_instance)
@@ -92,21 +94,21 @@ void callback(int pos, void*)
 void ObjDetect::start()
 {
     //cv::startWindowThread();
-    cv::namedWindow(kWinName, cv::WINDOW_AUTOSIZE);
+    //cv::namedWindow(kWinName, cv::WINDOW_AUTOSIZE);
     int initialConf = (int)(confThreshold * 100);
-    cv::createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
+    //cv::createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
     process = true;
     threadPool.push_back(std::thread(&ObjDetect::processingVideoCapture, this));
     threadPool.push_back(std::thread(&ObjDetect::processingObjecting, this));
-    postprocessing();
+    threadPool.push_back(std::thread(&ObjDetect::postprocessing, this));
 }
 
 ObjDetect::ObjDetect(pt::QueueFPS<pt::detectedBounds>& bounds):
 	process {false},
 	mean(0,0,0,0),
 	swapRB(true),
-	imageHeight(416),
-	imageWidth(416),
+	imageHeight(height),
+	imageWidth(width),
 	scale(1.0 / 255.0),
     nmsThreshold(0.4)
 {
@@ -176,7 +178,11 @@ void ObjDetect::processingObjecting()
 			preprocessing(frame, net, cv::Size(imageWidth, imageHeight), scale, mean, swapRB);
             processedFramesQueue.push(frame);
 			std::vector<cv::Mat> outs;
+            auto e1 = cv::getTickCount();
 			net.forward(outs, outNames);
+            auto e2 = cv::getTickCount();
+            auto time = (e2 - e1) / cv::getTickFrequency();
+            std::cout << time << std::endl;
 			predictionsQueue.push(outs);
         }
     }
@@ -212,7 +218,7 @@ void ObjDetect::postprocessing()
 
         postprocess(frame, outs, net, backend);
 
-        if (predictionsQueue.counter > 1)
+        /*if (predictionsQueue.counter > 1)
         {
             std::string label = cv::format("Camera: %.2f FPS", framesQueue.getFPS());
             putText(frame, label, cv::Point(0, 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0));
@@ -223,7 +229,7 @@ void ObjDetect::postprocessing()
             label = cv::format("Skipped frames: %d", framesQueue.counter - predictionsQueue.counter);
             putText(frame, label, cv::Point(0, 45), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0));
         }
-        cv::imshow(kWinName, frame);
+        cv::imshow(kWinName, frame)*/;
     }
 }
 
@@ -344,12 +350,23 @@ void ObjDetect::postprocess(cv::Mat& frame, const std::vector<cv::Mat>& outs, cv
         confidences = nmsConfidences;
     }
 
+    pt::detectedBounds newBounds(frame);
+    std::map<int, cv::Rect_<float>> rectangles;
+    int addItem = 0;
     for (size_t idx = 0; idx < boxes.size(); ++idx)
     {
         cv::Rect box = boxes[idx];
-        drawPred(classIds[idx], confidences[idx], box.x, box.y,
-            box.x + box.width, box.y + box.height, frame);
+        
+        if (classIds[idx] == 0)
+        {
+            auto rect = cv::Rect_<float>(cv::Point_<float>(box.x, box.y), cv::Point_<float>(box.x + box.width, box.y + box.height));
+            rectangles.insert(std::make_pair(addItem, rect));
+            addItem++;
+        }
+        
     }
+    newBounds.setMapBoxes(rectangles);
+    bounds->push(newBounds);
 }
 
 void ObjDetect::drawPred(int classId, float conf, int left, int top, int right, int bottom, cv::Mat& frame)
