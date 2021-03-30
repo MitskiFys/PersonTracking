@@ -6,16 +6,16 @@ const int CNUM = 20;
 
 int main()
 {
-	std::string modelPath = "C:/Users/mitsk/source/repos/OpenCV/x64/Release/yolov4-tiny.weights";
-	std::string configPath = "C:/Users/mitsk/source/repos/OpenCV/x64/Release/yolov4-tiny.cfg";
+	std::string modelPath = "C:/Develop/PersonTraking/models/yolov4-tiny.weights";
+	std::string configPath = "C:/Develop/PersonTraking/models/yolov4-tiny.cfg";
 	pt::QueueFPS<pt::detectedBounds> bounds;
 	pt::QueueFPS<pt::detectedBounds> resultBounds;
 
 	pt::QueueFPS<pt::detectedBounds> copyBounds;
 	auto objDetecter = ObjDetect::createInstance(bounds);
-	objDetecter->initNet(modelPath, configPath, cv::dnn::DNN_BACKEND_DEFAULT, cv::dnn::DNN_TARGET_OPENCL_FP16);
+	objDetecter->initNet(modelPath, configPath, cv::dnn::DNN_BACKEND_DEFAULT, cv::dnn::DNN_TARGET_OPENCL);
 	objDetecter->setInput(0);
-	objDetecter->setClasses("C:/Users/mitsk/source/repos/OpenCV/x64/Release/coco.names");
+	objDetecter->setClasses("C:/Develop/PersonTraking/models/coco.names");
 	objDetecter->start();
 	
 	ObjTracker tracker(bounds, resultBounds, copyBounds);
@@ -23,7 +23,7 @@ int main()
 
 	// Create a window
 	static const std::string kWinName = "Deep learning object detection in OpenCV";
-	cv::startWindowThread();
+	//cv::startWindowThread();
 	namedWindow(kWinName, WINDOW_NORMAL);
 
 	// 0. randomly generate colors, only for display

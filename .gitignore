@@ -52,3 +52,6 @@ PersonTraking/build/CMakeFiles/3.20.0/CMakeSystem.cmake
 PersonTraking/build/CMakeFiles/generate.stamp.depend
 PersonTraking/build/.vs/PersonTracking/v16/.suo
 PersonTraking/CMakeLists.txt
+models/coco.names
+models/yolov4-tiny.cfg
+models/yolov4-tiny.weights
