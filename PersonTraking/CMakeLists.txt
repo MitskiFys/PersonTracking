@@ -10,6 +10,7 @@ HungarianAlgorithm.cpp
 KalmanTracker.cpp
 ObjDetect.cpp
 ObjTracker.cpp
+HumanIdentification.cpp
 )
 
 set(HEADER_FILES
@@ -17,6 +18,7 @@ HungarianAlgorithm.h
 KalmanTracker.h
 ObjDetect.h
 ObjTracker.h
+HumanIdentification.h
 )
 
 SET(OPENCV_DIR $ENV{OPENCV_DIR})
@@ -29,6 +31,8 @@ main.cpp
 ${SOURCE_FILES}
 ${HEADER_FILES}
 )
+
+if (${CMAKE_BUILD_TYPE} MATCHES "Release")
 
 target_link_libraries(
 PersonTracking 
@@ -83,3 +87,61 @@ opencv_ximgproc451.lib
 opencv_xobjdetect451.lib
 opencv_xphoto451.lib
 )
+
+else()
+
+target_link_libraries(
+PersonTracking 
+opencv_aruco451d.lib
+opencv_bgsegm451d.lib
+opencv_bioinspired451d.lib
+opencv_calib3d451d.lib
+opencv_ccalib451d.lib
+opencv_core451d.lib
+opencv_datasets451d.lib
+opencv_dnn_objdetect451d.lib
+opencv_dnn_superres451d.lib
+opencv_dnn451d.lib
+opencv_dpm451d.lib
+opencv_face451d.lib
+opencv_features2d451d.lib
+opencv_flann451d.lib
+opencv_fuzzy451d.lib
+opencv_gapi451d.lib
+opencv_hfs451d.lib
+opencv_highgui451d.lib
+opencv_img_hash451d.lib
+opencv_imgcodecs451d.lib
+opencv_imgproc451d.lib
+opencv_intensity_transform451d.lib
+opencv_line_descriptor451d.lib
+opencv_mcc451d.lib
+opencv_ml451d.lib
+opencv_objdetect451d.lib
+opencv_optflow451d.lib
+opencv_phase_unwrapping451d.lib
+opencv_photo451d.lib
+opencv_plot451d.lib
+opencv_quality451d.lib
+opencv_rapid451d.lib
+opencv_reg451d.lib
+opencv_rgbd451d.lib
+opencv_saliency451d.lib
+opencv_shape451d.lib
+opencv_stereo451d.lib
+opencv_stitching451d.lib
+opencv_structured_light451d.lib
+opencv_superres451d.lib
+opencv_surface_matching451d.lib
+opencv_text451d.lib
+opencv_tracking451d.lib
+opencv_video451d.lib
+opencv_videoio451d.lib
+opencv_videostab451d.lib
+opencv_xfeatures2d451d.lib
+opencv_ximgproc451d.lib
+opencv_xobjdetect451d.lib
+opencv_xphoto451d.lib
+)
+
+endif()

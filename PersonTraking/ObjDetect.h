@@ -6,31 +6,35 @@
 #include <opencv2/highgui.hpp>
 #include "opencv2/core/ocl.hpp"
 #include <memory>
+#include <atomic>
+#include <opencv2/stitching/warpers.hpp>
 
 class ObjDetect
 {
 public:
 
 	static ObjDetect* Instance();
-	static ObjDetect* createInstance(pt::QueueFPS<pt::detectedBounds>& bounds);
+	static ObjDetect* createInstance();
 	static void deleteInstance();
 	void setInput(int camera);
 	void setInput(const std::string& filePath);
 	void setClasses(const std::string filepath);
 	void setImageWidth(const int width);
 	void setImageHeight(const int height);
-
+	void setBoundsOutput(pt::QueueFPS<pt::detectedBounds>& bounds);
+	void setSkipFrames(bool skip);
+	bool getWorkingStatus();
 	void initNet(const std::string modelFilePath, const std::string configFilePath, const int backend, const int target);
 
 	void setFps(const int fps);
 
 	void start();
+	void stop();
 
 protected:
-	ObjDetect(pt::QueueFPS<pt::detectedBounds>& bounds);
+	ObjDetect();
 	~ObjDetect();
 private:
-	ObjDetect() = delete;
 	ObjDetect(const ObjDetect& other) = delete;
 	ObjDetect& operator=(const ObjDetect& other) = delete;
 	ObjDetect(ObjDetect&& other) = delete;
@@ -51,6 +55,8 @@ private:
 	cv::Scalar mean;
 	bool process;
 	bool swapRB;
+	bool skipFrames = true;
+	std::atomic<bool> isWorking = false;
 	cv::VideoCapture videcapture;
 	cv::dnn::Net net;
 	pt::QueueFPS<pt::detectedBounds>* bounds;

@@ -1,7 +1,7 @@
 #include <iostream>
 #include "ObjTracker.h"
 #include "ObjDetect.h"
-
+#include "HumanIdentification.h"
 const int CNUM = 20;
 
 int main()
@@ -10,14 +10,20 @@ int main()
 	std::string configPath = "C:/Develop/PersonTraking/models/yolov4-tiny.cfg";
 	pt::QueueFPS<pt::detectedBounds> bounds;
 	pt::QueueFPS<pt::detectedBounds> resultBounds;
-
 	pt::QueueFPS<pt::detectedBounds> copyBounds;
-	auto objDetecter = ObjDetect::createInstance(bounds);
+
+	auto objDetecter = ObjDetect::createInstance();
 	objDetecter->initNet(modelPath, configPath, cv::dnn::DNN_BACKEND_DEFAULT, cv::dnn::DNN_TARGET_OPENCL);
-	objDetecter->setInput(0);
+	//objDetecter->setInput(0);
+	objDetecter->setSkipFrames(false);
 	objDetecter->setClasses("C:/Develop/PersonTraking/models/coco.names");
-	objDetecter->start();
+	objDetecter->setBoundsOutput(bounds);
+	//objDetecter->start();
 	
+	auto humanIdentification = HumanIdentification(ObjDetect::Instance());
+	humanIdentification.setSource("C:/Users/mitsk/Videos/train.MOV");
+	humanIdentification.startTraining();
+
 	ObjTracker tracker(bounds, resultBounds, copyBounds);
 	tracker.start();
 

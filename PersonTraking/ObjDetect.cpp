@@ -20,11 +20,11 @@ ObjDetect* ObjDetect::Instance()
 	}
 }
 
-ObjDetect* ObjDetect::createInstance(pt::QueueFPS<pt::detectedBounds>& bounds)
+ObjDetect* ObjDetect::createInstance()
 {
 	if (!_instance)
 	{
-		_instance = new ObjDetect(bounds);
+		_instance = new ObjDetect();
 	}
     return _instance;
 }
@@ -36,8 +36,8 @@ void ObjDetect::setInput(int camera)
 	{
 		assert(false);
 	}
-    videcapture.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
-    videcapture.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
+    videcapture.set(cv::CAP_PROP_FRAME_WIDTH, 416);
+    videcapture.set(cv::CAP_PROP_FRAME_HEIGHT, 416);
 }
 
 void ObjDetect::setInput(const std::string& filePath)
@@ -71,6 +71,21 @@ void ObjDetect::setImageHeight(const int height)
 	imageHeight = height;
 }
 
+void ObjDetect::setBoundsOutput(pt::QueueFPS<pt::detectedBounds>& bounds)
+{
+    this->bounds = &bounds;
+}
+
+void ObjDetect::setSkipFrames(bool skip)
+{
+    this->skipFrames = skip;
+}
+
+bool ObjDetect::getWorkingStatus()
+{
+    return isWorking.load();
+}
+
 void ObjDetect::initNet(const std::string modelFilePath, const std::string configFilePath, const int backend, const int target)
 {
 	net = cv::dnn::readNet(configFilePath, modelFilePath);
@@ -95,15 +110,22 @@ void ObjDetect::start()
 {
     //cv::startWindowThread();
     //cv::namedWindow(kWinName, cv::WINDOW_AUTOSIZE);
-    int initialConf = (int)(confThreshold * 100);
+   //int initialConf = (int)(confThreshold * 100);
     //cv::createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
     process = true;
+    this->isWorking.store(true);
     threadPool.push_back(std::thread(&ObjDetect::processingVideoCapture, this));
     threadPool.push_back(std::thread(&ObjDetect::processingObjecting, this));
     threadPool.push_back(std::thread(&ObjDetect::postprocessing, this));
 }
 
-ObjDetect::ObjDetect(pt::QueueFPS<pt::detectedBounds>& bounds):
+void ObjDetect::stop()
+{
+    process = false;
+    predictionsQueue.clear();
+}
+
+ObjDetect::ObjDetect():
 	process {false},
 	mean(0,0,0,0),
 	swapRB(true),
@@ -112,7 +134,6 @@ ObjDetect::ObjDetect(pt::QueueFPS<pt::detectedBounds>& bounds):
 	scale(1.0 / 255.0),
     nmsThreshold(0.4)
 {
-	this->bounds = &bounds;
 	setFps(30);
 }
 
@@ -151,7 +172,7 @@ void ObjDetect::processingVideoCapture()
 		}	
 		else
 		{
-			process = false;
+            process = false;
 			break;
 		}
 		cv::waitKey(fpsDelay);
@@ -161,7 +182,7 @@ void ObjDetect::processingVideoCapture()
 void ObjDetect::processingObjecting()
 {
     cv::Mat blob;
-    while (process)
+    while (isWorking)
     {
         // Get a next frame
         cv::Mat frame;
@@ -169,7 +190,10 @@ void ObjDetect::processingObjecting()
             if (!framesQueue.empty())
             {
                 frame = framesQueue.get();
-                framesQueue.clear();  // Skip the rest of frames   
+                if (skipFrames)
+                {
+                    framesQueue.clear();  // Skip the rest of frames 
+                }  
             }
         }
         // Process the frame
@@ -184,6 +208,10 @@ void ObjDetect::processingObjecting()
             auto time = (e2 - e1) / cv::getTickFrequency();
             std::cout << time << std::endl;
 			predictionsQueue.push(outs);
+        }
+        else if (process == false)
+        {
+            isWorking.store(false);
         }
     }
 }
@@ -208,7 +236,7 @@ void ObjDetect::preprocessing(const cv::Mat& frame, cv::dnn::Net& net, cv::Size 
 
 void ObjDetect::postprocessing()
 {
-    while (cv::waitKey(1) < 0 && process)
+    while (cv::waitKey(1) < 0 && isWorking)
     {
         if (predictionsQueue.empty())
             continue;
