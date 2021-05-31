@@ -58,15 +58,54 @@ namespace
 
 		return ret2;
 	}
+
+	static float similarity(const std::vector<float>& feature1, const std::vector<float>& feature2)
+	{
+		float result = 0.0;
+		for (int i = 0; i < (int)feature1.size(); i++)
+		{
+			result += feature1[i] * feature2[i];
+		}
+		return result;
+	}
+
+	static void getTopK(const std::vector<std::vector<float>>& queryFeatures, const std::vector<std::vector<float>>& galleryFeatures, const int& topk, std::vector<std::vector<int>>& result)
+	{
+		for (int i = 0; i < (int)queryFeatures.size(); i++)
+		{
+			std::vector<float> similarityList;
+			std::vector<int> index;
+			for (int j = 0; j < (int)galleryFeatures.size(); j++)
+			{
+				similarityList.push_back(similarity(queryFeatures[i], galleryFeatures[j]));
+				index.push_back(j);
+			}
+			sort(index.begin(), index.end(), [&](int x, int y) {return similarityList[x] > similarityList[y]; });
+			std::vector<int> topk_result;
+			for (int j = 0; j < cv::min(topk, (int)index.size()); j++)
+			{
+				topk_result.push_back(index[j]);
+			}
+			result.push_back(topk_result);
+		}
+		return;
+	}
 }
 
 HumanIdentification::HumanIdentification(ObjDetect* objDetect)
 {
 	this->objDetect = objDetect;
 	setSourcebounds(this->bounds);
-	/*net = cv::dnn::readNet("C:/Develop/PersonTraking/PersonTraking/youtu_reid_baseline_lite.onnx");
+	net = cv::dnn::readNet("C:/Develop/PersonTraking/PersonTraking/youtu_reid_baseline_lite.onnx");
 	net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-	net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);*/
+	net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+
+	classifierSVM = cv::ml::SVM::create();
+	classifierSVM->setType(cv::ml::SVM::C_SVC);
+	classifierSVM->setKernel(cv::ml::SVM::RBF);
+
+	classifierSVM->setTermCriteria(cv::TermCriteria(cv::TermCriteria::Type::MAX_ITER,
+		1000, 1e-5));
 }
 
 void HumanIdentification::setSource(const std::string& source)
@@ -85,51 +124,191 @@ void HumanIdentification::startTraining()
 	std::vector<cv::Mat> batch;
 	while (objDetect->getWorkingStatus() /*|| batch.size() > 0*/) 
 	{
-		cv::waitKey(1);
-		//if (!bounds.empty())
-		//{
-		//	do
-		//	{
-		//		auto image = getImageInBounds(bounds.get());
-		//		if (!image.empty())
-		//		{
-		//			//cv::imshow("asdasd", image);
-		//			//cv::waitKey(1);
-		//			batch.push_back(image);
-		//		}
-		//	} while (batch.size() != _batchSize && !bounds.empty());
-		//}
-		//if (batch.size() == _batchSize || (!objDetect->getWorkingStatus()))
-		//{
-		//	//extractFeatures(batch);
-		//	batch.clear();
-		//}
+		if (!bounds.empty())
+		{
+			do
+			{
+				auto e1 = cv::getTickCount();
+				auto image = getImageInBounds(bounds.get());
+				auto e2 = cv::getTickCount();
+				auto time = (e2 - e1) / cv::getTickFrequency();
+				std::cout << time << std::endl;
+				if (!image.empty())
+				{
+					cv::imshow("asdasd", image);
+					cv::waitKey(300);
+					batch.push_back(image);
+				}
+			} while (batch.size() != _batchSize && !bounds.empty());
+		}
+		if (batch.size() == _batchSize || (!objDetect->getWorkingStatus()))
+		{
+			extractFeatures(batch);
+			batch.clear();
+		}
 	}
 	std::cout << "Find!" << std::endl;
 }
 
-void HumanIdentification::extractFeatures(std::vector<cv::Mat> batch)
+void HumanIdentification::trainSVMModelFromPrepairedImages(std::vector<std::string>& filepath)
+{
+	auto rowCount = 0;
+	auto columnCount = 0;
+	auto group = 0;
+	cv::Mat groups;
+	std::vector<std::vector<std::vector<float>>> vecOfFeatures;
+	for (const auto& path : filepath)
+	{
+		extractFeaturesfromPrepairedImage(path);
+		rowCount += features.size();
+		columnCount = features.at(0).size();
+		for (int j = 0; j < features.size(); j++)
+		{
+			groups.push_back(group);
+		}
+		vecOfFeatures.push_back(features);
+		features.clear();
+		++group;
+	}
+
+	cv::Mat samples(rowCount, columnCount, CV_32F);
+
+	int filledRows = 0;
+	for (const auto& vecFeature : vecOfFeatures)
+	{
+		for (int i = filledRows; i < vecFeature.size() + filledRows; i++)
+		{
+			for (int j = 0; j < columnCount; j++)
+			{
+				samples.at<float>(i, j) = vecFeature.at(i - filledRows).at(j);
+			}
+		}
+		filledRows += vecFeature.size();
+	}
+
+
+	classifierSVM->trainAuto(samples, cv::ml::ROW_SAMPLE, groups);
+	classifierSVM->save("trainingData.yml");
+}
+
+
+void HumanIdentification::trainZeroFile()
+{
+	std::vector<std::string> paths;
+	paths.push_back("C:/Develop/PersonTraking/Market-1501-v15.09.15/filtredImages/img_%04d.jpg");
+	paths.push_back("C:/Develop/PersonTraking/Market-1501-v15.09.15/david_train/img_%04d.jpg");
+	trainSVMModelFromPrepairedImages(paths);
+	
+	extractFeaturesfromPrepairedImage("C:/Develop/PersonTraking/Market-1501-v15.09.15/david_test/img_%04d.jpg");
+
+	for (const auto& feature : features)
+	{
+		std::cout << classifierSVM->predict(feature) << std::endl;
+	}
+	features.clear();
+
+	extractFeaturesfromPrepairedImage("C:/Develop/PersonTraking/Market-1501-v15.09.15/person2_test/img_%04d.jpg");
+
+	for (const auto& feature : features)
+	{
+		std::cout << classifierSVM->predict(feature) << std::endl;
+	}
+	features.clear();
+
+	extractFeaturesfromPrepairedImage("C:/Develop/PersonTraking/Market-1501-v15.09.15/person3_test/img_%04d.jpg");
+
+	for (const auto& feature : features)
+	{
+		std::cout << classifierSVM->predict(feature) << std::endl;
+	}
+	features.clear();
+	const auto asd = 123;
+
+	//classifierSVM
+}
+
+
+
+void HumanIdentification::extractFeaturesfromPrepairedImage(const std::string& filepath)
+{
+	cv::VideoCapture videcapture;
+	videcapture.open(filepath);
+	if (!videcapture.isOpened())
+	{
+		assert(false);
+	}
+	bool isHaveImage = true;
+	cv::Mat frame;
+	std::vector<cv::Mat> batch;
+	auto trainIter = 1;
+	while (isHaveImage)
+	{
+		try
+		{
+			isHaveImage = videcapture.read(frame);
+		}
+		catch (std::exception exp)
+		{
+			isHaveImage = false;
+			std::cout << exp.what() << std::endl;
+		}
+		if (!frame.empty())
+		{
+			if (batch.size() < _batchSize)
+			{
+				batch.push_back(preprocess(frame));
+			}
+			else
+			{
+
+				std::cout << trainIter << std::endl;
+				extractFeatures(batch);
+
+				trainIter++;
+				batch.clear();
+			}
+		}
+	}
+	if (batch.size() > 0)
+	{
+		std::cout << trainIter << std::endl;
+		extractFeatures(batch);
+
+		trainIter++;
+		batch.clear();
+	}
+
+}
+
+void HumanIdentification::extractFeatures(std::vector<cv::Mat>& batch)
 {
 	cv::Mat blob = cv::dnn::blobFromImages(batch, 1.0, cv::Size(_resizeWidth, _resizeHeight), cv::Scalar(0.0, 0.0, 0.0), true, false, CV_32F);
 	net.setInput(blob);
 	auto e1 = cv::getTickCount();
-	cv::Mat out = net.forward();
+	const auto out = net.forward();
 	auto e2 = cv::getTickCount();
 	auto time = (e2 - e1) / cv::getTickFrequency();
 	std::cout << time << std::endl;
-	for (int i = 0; i < (int)out.size().height; i++)
+	auto test = out.size;
+	for (int i = 0; i < (int)out.size[0]; i++)
 	{
 		std::vector<double> temp_feature;
-		for (int j = 0; j < (int)out.size().width; j++)
+		for (int j = 0; j < (int)out.size[1]; j++)
 		{
-			temp_feature.push_back(out.at<float>(i, j));
+			temp_feature.push_back(out.at<float>(i, j, 0));
 		}
 		//normal feature
 		features.push_back(normalization(temp_feature));
 	}
+	const auto asd = 123;
 }
 
 void HumanIdentification::setSourcebounds(pt::QueueFPS<pt::detectedBounds>& bounds)
 {
 	objDetect->setBoundsOutput(bounds);
+}
+
+void HumanIdentification::trainClassifier()
+{
+
 }

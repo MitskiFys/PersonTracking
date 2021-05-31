@@ -206,7 +206,7 @@ void ObjDetect::processingObjecting()
 			net.forward(outs, outNames);
             auto e2 = cv::getTickCount();
             auto time = (e2 - e1) / cv::getTickFrequency();
-            std::cout << time << std::endl;
+            //std::cout << time << std::endl;
 			predictionsQueue.push(outs);
         }
         else if (process == false)

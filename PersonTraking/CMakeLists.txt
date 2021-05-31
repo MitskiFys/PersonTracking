@@ -11,6 +11,7 @@ KalmanTracker.cpp
 ObjDetect.cpp
 ObjTracker.cpp
 HumanIdentification.cpp
+WebSocket.cpp
 )
 
 set(HEADER_FILES
@@ -19,18 +20,32 @@ KalmanTracker.h
 ObjDetect.h
 ObjTracker.h
 HumanIdentification.h
+WebSocket.h
 )
 
 SET(OPENCV_DIR $ENV{OPENCV_DIR})
+SET(QT_DIR $ENV{QT_DIR_X64})
 SET(OPENCV_INCLUDE_DIR ${OPENCV_DIR}/../../include)
-include_directories(${OPENCV_INCLUDE_DIR})
-link_directories(${OPENCV_DIR}/lib)
+include_directories(
+${OPENCV_INCLUDE_DIR}
+${QT_DIR}/include
+)
+
+link_directories(
+${OPENCV_DIR}/lib
+${QT_DIR}/lib
+)
+
+find_package(Qt5 COMPONENTS Widgets Core Network WebSockets Gui Quick REQUIRED)
 
 add_executable(PersonTracking 
 main.cpp
 ${SOURCE_FILES}
 ${HEADER_FILES}
 )
+
+
+set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC TRUE)
 
 if (${CMAKE_BUILD_TYPE} MATCHES "Release")
 
@@ -86,6 +101,7 @@ opencv_xfeatures2d451.lib
 opencv_ximgproc451.lib
 opencv_xobjdetect451.lib
 opencv_xphoto451.lib
+Qt5Core.lib
 )
 
 else()
@@ -142,6 +158,12 @@ opencv_xfeatures2d451d.lib
 opencv_ximgproc451d.lib
 opencv_xobjdetect451d.lib
 opencv_xphoto451d.lib
+Qt5::Core 
+Qt5::Gui 
+Qt5::Widgets 
+Qt5::Network 
+Qt5::Quick
+Qt5::WebSockets
 )
 
 endif()

@@ -55,3 +55,14 @@ PersonTraking/CMakeLists.txt
 models/coco.names
 models/yolov4-tiny.cfg
 models/yolov4-tiny.weights
+*.jpg
+*.mat
+*.jam
+Market-1501-v15.09.15/readme.txt
+PersonTraking/build/CMakeFiles/PersonTracking_autogen.dir/AutogenInfo.json
+PersonTraking/build/CMakeFiles/PersonTracking_autogen.dir/AutogenUsed_Debug.txt
+PersonTraking/build/CMakeFiles/PersonTracking_autogen.dir/ParseCache_Debug.txt
+PersonTraking/build/PersonTracking_autogen/include_Debug/EWIEGA46WW/moc_WebSocket.cpp
+PersonTraking/build/PersonTracking_autogen/include_Debug/EWIEGA46WW/moc_WebSocket.cpp.d
+PersonTraking/build/PersonTracking_autogen/mocs_compilation_Debug.cpp
+PersonTraking/youtu_reid_baseline_lite.onnx
