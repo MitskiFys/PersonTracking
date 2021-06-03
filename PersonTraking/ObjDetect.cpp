@@ -4,7 +4,7 @@
 
 ObjDetect* ObjDetect::_instance = nullptr;
 static const std::string kWinName = "Deep learning object detection in OpenCV";
-static float confThreshold = 0.3;
+static float confThreshold = 0.1;
 const int width = 416;
 const int height = 416;
 ObjDetect* ObjDetect::Instance()
@@ -36,6 +36,7 @@ void ObjDetect::setInput(int camera)
 	{
 		assert(false);
 	}
+    this->framesQueue = new pt::QueueFPS<cv::Mat>();
     videcapture.set(cv::CAP_PROP_FRAME_WIDTH, 416);
     videcapture.set(cv::CAP_PROP_FRAME_HEIGHT, 416);
 }
@@ -47,6 +48,11 @@ void ObjDetect::setInput(const std::string& filePath)
 	{
 		assert(false);
 	}
+}
+
+void ObjDetect::setInput(pt::QueueFPS<cv::Mat>& frameSourse)
+{
+    this->framesQueue = &frameSourse;
 }
 
 void ObjDetect::setClasses(const std::string filepath)
@@ -114,7 +120,7 @@ void ObjDetect::start()
     //cv::createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
     process = true;
     this->isWorking.store(true);
-    threadPool.push_back(std::thread(&ObjDetect::processingVideoCapture, this));
+    //threadPool.push_back(std::thread(&ObjDetect::processingVideoCapture, this));
     threadPool.push_back(std::thread(&ObjDetect::processingObjecting, this));
     threadPool.push_back(std::thread(&ObjDetect::postprocessing, this));
 }
@@ -168,7 +174,7 @@ void ObjDetect::processingVideoCapture()
         }
 		if (!frame.empty())
 		{
-			framesQueue.push(frame.clone());
+			framesQueue->push(frame.clone());
 		}	
 		else
 		{
@@ -187,15 +193,19 @@ void ObjDetect::processingObjecting()
         // Get a next frame
         cv::Mat frame;
         {
-            if (!framesQueue.empty())
+            if (!framesQueue->empty())
             {
-                frame = framesQueue.get();
+                frame = framesQueue->get();
                 if (skipFrames)
                 {
-                    framesQueue.clear();  // Skip the rest of frames 
+                    framesQueue->clear();  // Skip the rest of frames 
                 }  
             }
         }
+        const auto test = frame.type();
+        const auto asd = 123;
+        //cv::imshow("asdasd", frame);
+        //cv::waitKey(30000);
         // Process the frame
         if (!frame.empty())
         {

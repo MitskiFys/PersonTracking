@@ -12,6 +12,7 @@ ObjDetect.cpp
 ObjTracker.cpp
 HumanIdentification.cpp
 WebSocket.cpp
+NetworkManager.cpp
 )
 
 set(HEADER_FILES
@@ -21,6 +22,7 @@ ObjDetect.h
 ObjTracker.h
 HumanIdentification.h
 WebSocket.h
+NetworkManager.h
 )
 
 SET(OPENCV_DIR $ENV{OPENCV_DIR})

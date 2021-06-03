@@ -18,6 +18,7 @@ public:
 	static void deleteInstance();
 	void setInput(int camera);
 	void setInput(const std::string& filePath);
+	void setInput(pt::QueueFPS<cv::Mat>& frameSourse);
 	void setClasses(const std::string filepath);
 	void setImageWidth(const int width);
 	void setImageHeight(const int height);
@@ -49,7 +50,7 @@ private:
 	void postprocess(cv::Mat& frame, const std::vector<cv::Mat>& outs, cv::dnn::Net& net, int backend);
 	void drawPred(int classId, float conf, int left, int top, int right, int bottom, cv::Mat& frame);
 
-	pt::QueueFPS<cv::Mat> framesQueue;
+	pt::QueueFPS<cv::Mat> *framesQueue;
 	pt::QueueFPS<cv::Mat> processedFramesQueue;
 	pt::QueueFPS<std::vector<cv::Mat> > predictionsQueue;
 	cv::Scalar mean;

@@ -4,7 +4,7 @@
 namespace
 {
 
-	const double iouThreshold = 0.3;
+	const double iouThreshold = 0.1;
 
 	const int min_hits = 3;
 }
