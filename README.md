@@ -18,7 +18,7 @@
 4) Настрока проекта
 
 ```sh
-git clone https://github.com/Mitsko/PersonTracking.git
+git clone https://github.com/MitskiFys/PersonTracking.git
 cd PersonTracking
 mkdir build && cd build
 cmake-gui ..
