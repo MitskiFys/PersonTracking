@@ -45,6 +45,23 @@ namespace
 		return cv::Mat();
 	}
 
+	cv::Mat getImageInBounds(const cv::Mat& frame, cv::Rect_<float> bounds)
+	{
+		if (bounds.empty())
+		{
+			return cv::Mat();
+		}
+		if (bounds.x <= 0)
+			bounds.x = 0;
+		if (bounds.y <= 0)
+			bounds.y = 0;
+		if (bounds.x + bounds.width > frame.cols)
+			bounds.width += frame.cols - (bounds.x + bounds.width);
+		if (bounds.y + bounds.height > frame.rows)
+			bounds.height += frame.rows - (bounds.y + bounds.height);
+		return preprocess(frame(bounds));
+	}
+
 	static std::vector<float> normalization(const std::vector<double>& feature)
 	{
 		std::vector<float> ret2;
@@ -69,6 +86,19 @@ namespace
 		return result;
 	}
 
+	static float avg(std::vector<float>& v)
+	{
+		float return_value = 0.0;
+		int n = v.size();
+
+		for (int i = 0; i < n; i++)
+		{
+			return_value += v[i];
+		}
+
+		return (return_value / n);
+	}
+
 	static void getTopK(const std::vector<std::vector<float>>& queryFeatures, const std::vector<std::vector<float>>& galleryFeatures, const int& topk, std::vector<std::vector<int>>& result)
 	{
 		for (int i = 0; i < (int)queryFeatures.size(); i++)
@@ -80,6 +110,7 @@ namespace
 				similarityList.push_back(similarity(queryFeatures[i], galleryFeatures[j]));
 				index.push_back(j);
 			}
+			const auto avarage = avg(similarityList);
 			sort(index.begin(), index.end(), [&](int x, int y) {return similarityList[x] > similarityList[y]; });
 			std::vector<int> topk_result;
 			for (int j = 0; j < cv::min(topk, (int)index.size()); j++)
@@ -92,19 +123,25 @@ namespace
 	}
 }
 
-HumanIdentification::HumanIdentification(ObjDetect* objDetect)
+HumanIdentification::HumanIdentification(ObjDetect* objDetect):
+	m_threadIsWorking(false),
+	m_personId(0),
+	m_isFind(false)
 {
-	this->objDetect = objDetect;
-	setSourcebounds(this->bounds);
+	if (objDetect)
+	{
+		this->objDetect = objDetect;
+		setSourcebounds(this->bounds);
+	}
 	net = cv::dnn::readNet("C:/Develop/PersonTraking/PersonTraking/youtu_reid_baseline_lite.onnx");
 	net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
 	net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
 
-	classifierSVM = cv::ml::SVM::create();
-	classifierSVM->setType(cv::ml::SVM::C_SVC);
-	classifierSVM->setKernel(cv::ml::SVM::RBF);
+	m_classifierSVM = cv::ml::SVM::create();
+	m_classifierSVM->setType(cv::ml::SVM::C_SVC);
+	m_classifierSVM->setKernel(cv::ml::SVM::RBF);
 
-	classifierSVM->setTermCriteria(cv::TermCriteria(cv::TermCriteria::Type::MAX_ITER,
+	m_classifierSVM->setTermCriteria(cv::TermCriteria(cv::TermCriteria::Type::MAX_ITER,
 		1000, 1e-5));
 }
 
@@ -160,14 +197,14 @@ void HumanIdentification::trainSVMModelFromPrepairedImages(std::vector<std::stri
 	for (const auto& path : filepath)
 	{
 		extractFeaturesfromPrepairedImage(path);
-		rowCount += features.size();
-		columnCount = features.at(0).size();
-		for (int j = 0; j < features.size(); j++)
+		rowCount += m_features.size();
+		columnCount = m_features.at(0).size();
+		for (int j = 0; j < m_features.size(); j++)
 		{
 			groups.push_back(group);
 		}
-		vecOfFeatures.push_back(features);
-		features.clear();
+		vecOfFeatures.push_back(m_features);
+		m_features.clear();
 		++group;
 	}
 
@@ -187,8 +224,8 @@ void HumanIdentification::trainSVMModelFromPrepairedImages(std::vector<std::stri
 	}
 
 
-	classifierSVM->trainAuto(samples, cv::ml::ROW_SAMPLE, groups);
-	classifierSVM->save("trainingData.yml");
+	m_classifierSVM->trainAuto(samples, cv::ml::ROW_SAMPLE, groups);
+	m_classifierSVM->save("trainingData.yml");
 }
 
 
@@ -196,35 +233,16 @@ void HumanIdentification::trainZeroFile()
 {
 	std::vector<std::string> paths;
 	paths.push_back("C:/Develop/PersonTraking/Market-1501-v15.09.15/filtredImages/img_%04d.jpg");
-	paths.push_back("C:/Develop/PersonTraking/Market-1501-v15.09.15/david_train/img_%04d.jpg");
+	paths.push_back("C:/Develop/PersonTraking/Market-1501-v15.09.15/novikov_train/img_%04d.jpg");
 	trainSVMModelFromPrepairedImages(paths);
-	
-	extractFeaturesfromPrepairedImage("C:/Develop/PersonTraking/Market-1501-v15.09.15/david_test/img_%04d.jpg");
 
-	for (const auto& feature : features)
+	extractFeaturesfromPrepairedImage("C:/Develop/PersonTraking/Market-1501-v15.09.15/novikov_test/img_%04d.jpg");
+
+	for (const auto& feature : m_features)
 	{
-		std::cout << classifierSVM->predict(feature) << std::endl;
+		std::cout << m_classifierSVM->predict(feature) << std::endl;
 	}
-	features.clear();
-
-	extractFeaturesfromPrepairedImage("C:/Develop/PersonTraking/Market-1501-v15.09.15/person2_test/img_%04d.jpg");
-
-	for (const auto& feature : features)
-	{
-		std::cout << classifierSVM->predict(feature) << std::endl;
-	}
-	features.clear();
-
-	extractFeaturesfromPrepairedImage("C:/Develop/PersonTraking/Market-1501-v15.09.15/person3_test/img_%04d.jpg");
-
-	for (const auto& feature : features)
-	{
-		std::cout << classifierSVM->predict(feature) << std::endl;
-	}
-	features.clear();
-	const auto asd = 123;
-
-	//classifierSVM
+	m_features.clear();
 }
 
 
@@ -240,7 +258,7 @@ void HumanIdentification::extractFeaturesfromPrepairedImage(const std::string& f
 	bool isHaveImage = true;
 	cv::Mat frame;
 	std::vector<cv::Mat> batch;
-	auto trainIter = 1;
+	m_features.clear();
 	while (isHaveImage)
 	{
 		try
@@ -260,21 +278,14 @@ void HumanIdentification::extractFeaturesfromPrepairedImage(const std::string& f
 			}
 			else
 			{
-
-				std::cout << trainIter << std::endl;
 				extractFeatures(batch);
-
-				trainIter++;
 				batch.clear();
 			}
 		}
 	}
 	if (batch.size() > 0)
 	{
-		std::cout << trainIter << std::endl;
 		extractFeatures(batch);
-
-		trainIter++;
 		batch.clear();
 	}
 
@@ -285,10 +296,18 @@ void HumanIdentification::extractFeatures(std::vector<cv::Mat>& batch)
 	cv::Mat blob = cv::dnn::blobFromImages(batch, 1.0, cv::Size(_resizeWidth, _resizeHeight), cv::Scalar(0.0, 0.0, 0.0), true, false, CV_32F);
 	net.setInput(blob);
 	auto e1 = cv::getTickCount();
-	const auto out = net.forward();
+	cv::Mat out;
+	try
+	{
+		out = net.forward();
+	}
+	catch (...)
+	{
+		return;
+	}
 	auto e2 = cv::getTickCount();
 	auto time = (e2 - e1) / cv::getTickFrequency();
-	std::cout << time << std::endl;
+	std::cout << "Extract feature time - " <<  time << std::endl;
 	auto test = out.size;
 	for (int i = 0; i < (int)out.size[0]; i++)
 	{
@@ -298,9 +317,8 @@ void HumanIdentification::extractFeatures(std::vector<cv::Mat>& batch)
 			temp_feature.push_back(out.at<float>(i, j, 0));
 		}
 		//normal feature
-		features.push_back(normalization(temp_feature));
+		m_features.push_back(normalization(temp_feature));
 	}
-	const auto asd = 123;
 }
 
 void HumanIdentification::setSourcebounds(pt::QueueFPS<pt::detectedBounds>& bounds)
@@ -311,4 +329,82 @@ void HumanIdentification::setSourcebounds(pt::QueueFPS<pt::detectedBounds>& boun
 void HumanIdentification::trainClassifier()
 {
 
+}
+
+void HumanIdentification::threadFunctionFindPerson(pt::detectedBounds frameWithBounds)
+{
+	if (m_isFind.load())
+		return;
+	m_threadIsWorking.store(true);
+	const auto frame = frameWithBounds.getFrame();
+	const auto bounds = frameWithBounds.getMapWithBoxes();
+	if (bounds.empty())
+	{
+		return;
+	}
+	std::vector<cv::Mat> person;
+	std::vector<int> numeration;
+	for (const auto& bound : bounds)
+	{
+		numeration.push_back(bound.first);
+		person.push_back(getImageInBounds(frame, bound.second));
+	}
+	extractFeatures(person);
+	if (m_features.empty())
+	{
+		return;
+	}
+	auto iter = 0;
+	for (const auto& feature : m_features)
+	{
+		const auto id = m_classifierSVM->predict(feature);
+		if (id == 1)
+		{
+			m_isFind.store(true);
+			m_personId.store(numeration[iter]);
+			m_threadIsWorking.store(false);
+			return;
+		}
+		iter++;
+	}
+
+	m_features.clear();
+	m_isFind.store(false);
+	m_threadIsWorking.store(false);
+}
+
+void HumanIdentification::findPersonOnImage(pt::detectedBounds& frameWithBounds, bool inMainthread)
+{
+	if (!m_threadIsWorking.load())
+	{
+		auto thread = std::thread(&HumanIdentification::threadFunctionFindPerson, this, frameWithBounds);
+		if (inMainthread)
+		{
+			thread.join();
+		}
+		else
+		{
+			thread.detach();
+		}
+	}
+}
+
+bool HumanIdentification::isFindPerson()
+{
+	return m_isFind.load();
+}
+
+void HumanIdentification::personIsLost()
+{
+	m_isFind.store(false);
+}
+
+int HumanIdentification::getPersonId()
+{
+	return m_personId.load();
+}
+
+void HumanIdentification::readPretrainedModel(const std::string& filepath)
+{
+	m_classifierSVM = m_classifierSVM->load(filepath);
 }

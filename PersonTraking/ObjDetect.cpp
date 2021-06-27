@@ -48,6 +48,7 @@ void ObjDetect::setInput(const std::string& filePath)
 	{
 		assert(false);
 	}
+    this->framesQueue = new pt::QueueFPS<cv::Mat>();
 }
 
 void ObjDetect::setInput(pt::QueueFPS<cv::Mat>& frameSourse)

@@ -28,7 +28,7 @@ void NetworkManager::setHttpPort(int port)
 void NetworkManager::makeGetRequest()
 {
     QString url;
-    url.append(QString("http://10.110.14.220:")).append(QString::number(m_httpPort)).append("/frames/?peerId=%23self%3A0&token=").append(m_accessToken).append("&hash=0.3969172338125255").trimmed();
+    url.append(QString("http://10.110.15.232:")).append(QString::number(m_httpPort)).append("/frames/?peerId=%23self%3A0&token=").append(m_accessToken).append("&hash=0.3969172338125255").trimmed();
     auto reply = m_manager.get(QNetworkRequest(QUrl(url)));
 }
 
@@ -50,6 +50,6 @@ void NetworkManager::onFinished(QNetworkReply* reply) {
     frameSourse->push(QImage2Mat(*image).clone());
     delete image;
     reply->deleteLater();
-    QThread::msleep(50);
+    QThread::msleep(75);
     makeGetRequest();
 }

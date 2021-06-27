@@ -22,7 +22,7 @@ double GetIOU(Rect_<float> bb_test, Rect_<float> bb_gt)
 }
 
 ObjTracker::ObjTracker(pt::QueueFPS<pt::detectedBounds>& bounds, pt::QueueFPS<pt::detectedBounds>& resultBounds, pt::QueueFPS<pt::detectedBounds>& copyBounds):
-	process{ false}
+	process{false}
 {
 	this->bounds = &bounds;
 	this->resultBounds = &resultBounds;
@@ -48,9 +48,6 @@ ObjTracker::~ObjTracker()
 
 void ObjTracker::processing()
 {
-	
-
-
 	std::vector<KalmanTracker> trackers;
 	int64 start_time = 0;
 	int frame_count = 0;
@@ -85,12 +82,6 @@ void ObjTracker::processing()
 
 		pt::detectedBounds detOneFrameData = bounds->get();
 		std::map<int, cv::Rect_<float>> framesBoxes = detOneFrameData.getMapWithBoxes();
-		
-		if (framesBoxes.size() > 1)
-		{
-			auto test = 1;
-			std::cout << test << std::endl;
-		}
 
 		detFrameData.clear();
 		for (std::map<int, cv::Rect_<float>>::iterator it = framesBoxes.begin(); it != framesBoxes.end(); ++it) {

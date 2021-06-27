@@ -11,12 +11,12 @@ const int CNUM = 20;
 
 namespace
 {
-	
-}
-
-void threadWebSocketConnect()
-{
-
+	const std::string _sourcePath = "C:/Develop/PersonTraking/Market-1501-v15.09.15/findHere/img_%04d.jpg";
+	const std::string _modelPath = "C:/Develop/PersonTraking/models/yolov4-tiny.weights";
+	const std::string _configPath = "C:/Develop/PersonTraking/models/yolov4-tiny.cfg";
+	const std::string _classesPath = "C:/Develop/PersonTraking/models/coco.names";
+	const auto _backend = cv::dnn::DNN_BACKEND_DEFAULT;
+	const auto _target = cv::dnn::DNN_TARGET_OPENCL;
 }
 
 int main(int argc, char* argv[])
@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
 	QCoreApplication a(argc, argv);
 	QWebSocket webSocket;
 	EchoClient client(webSocket, true);
-	webSocket.open(QUrl("ws://127.0.0.1:8765/request"));
+	webSocket.open(QUrl("ws://10.110.15.232:8765/request"));
 	while (!client.isGetHttpPort())
 	{
 		cv::waitKey(100);
@@ -38,27 +38,22 @@ int main(int argc, char* argv[])
 	cv::waitKey(100);
 
 
-
-	std::string modelPath = "C:/Develop/PersonTraking/models/yolov4-tiny.weights";
-	std::string configPath = "C:/Develop/PersonTraking/models/yolov4-tiny.cfg";
 	pt::QueueFPS<pt::detectedBounds> bounds;
 	pt::QueueFPS<pt::detectedBounds> resultBounds;
 	pt::QueueFPS<pt::detectedBounds> copyBounds;
 
 	auto objDetecter = ObjDetect::createInstance();
-	objDetecter->initNet(modelPath, configPath, cv::dnn::DNN_BACKEND_DEFAULT, cv::dnn::DNN_TARGET_OPENCL_FP16);
+	objDetecter->initNet(_modelPath, _configPath, _backend, _target);
 	objDetecter->setInput(frameSourse);
 	objDetecter->setSkipFrames(true);
-	objDetecter->setClasses("C:/Develop/PersonTraking/models/coco.names");
+	objDetecter->setClasses(_classesPath);
 	objDetecter->setBoundsOutput(bounds);
-	objDetecter->start();
 	
-	//auto humanIdentification = HumanIdentification(ObjDetect::Instance());
+	auto humanIdentification = HumanIdentification();
+	humanIdentification.readPretrainedModel("trainingData.yml");
 	//humanIdentification.trainZeroFile();
-	//humanIdentification.setSource("C:/Develop/PersonTraking/Market-1501-v15.09.15/filtredImages/img_%04d.jpg");
 
-	//humanIdentification.startTraining();
-
+	objDetecter->start();
 	ObjTracker tracker(bounds, resultBounds, copyBounds);
 	tracker.start();
 
@@ -89,59 +84,67 @@ int main(int argc, char* argv[])
 		auto bounds = frameWithBounds.getMapWithBoxes();
 		auto frame = frameWithBounds.getFrame();
 
-		if (!bounds.empty())
+		int personId = -1;
+		static bool isFind = false;
+
+		if (!isFind)
 		{
-			const auto firstBounds = *bounds.begin();
-
-			const int xCent = firstBounds.second.x + (firstBounds.second.width / 2);
-			const int yCent = firstBounds.second.y + (firstBounds.second.height / 2);
-			
-			cv::circle(frame, cv::Point(xCent, yCent), 10, (0, 0, 255), -1);
-			if (xCent < 515)
-			{
-				client.ptzRight();
-				ptzMove = true;
-			}
-			else if (xCent > 765)
-			{
-				client.ptzLeft();
-				ptzMove = true;
-			}
-			else if (yCent < 235)
-			{
-				client.ptzUp();
-				ptzMove = true;
-			}
-			else if (yCent > 485)
-			{
-				client.ptzDown();
-				ptzMove = true;
-			}
-			else
-			{
-				if (ptzMove)
-				{
-					client.ptzStop();
-				}
-			}
-
+			humanIdentification.findPersonOnImage(frameWithBounds, false);
 		}
-		else
+
+		if (humanIdentification.isFindPerson())
 		{
-			if (ptzMove)
+			isFind = true;
+			personId = humanIdentification.getPersonId();
+		}
+
+		if (isFind)
+		{
+			bool isFindPerson = bounds.count(personId);
+			if (!isFindPerson)
 			{
-				client.ptzStop();
+				isFind = false;
+				humanIdentification.personIsLost();
 			}
 		}
 
-		
-
+		static bool ptzMove = false;
+		if (ptzMove && bounds.size() == 0)
+		{
+			client.ptzStop();
+			ptzMove = false;
+		}
 		for (const auto& box : bounds)
 		{
-			cv::rectangle(frame, box.second, randColor[box.first % CNUM], 2, 8, 0);
+			cv::rectangle(frame, box.second, randColor[isFind ? box.first == personId ? 1 : 5 : 5], 2, 8, 0);
+
+			if (isFind && box.first == personId)
+			{
+				const int xCent = box.second.x + (box.second.width / 2);
+				const int yCent = box.second.y + (box.second.height / 2);
+				cv::circle(frame, cv::Point(xCent, yCent), 10, (0, 0, 255), -1);
+				if (xCent < 480)
+				{
+					client.ptzLeft();
+					ptzMove = true;
+				}
+				else if (xCent > 1440)
+				{
+					client.ptzRight();
+					ptzMove = true;
+				}
+				else
+				{
+					if (ptzMove)
+					{
+						client.ptzStop();
+						ptzMove = false;
+					}
+				}
+			}
 		}
 
-		cv::rectangle(frame, cv::Rect(515, 235, 250, 250), randColor[1 % CNUM], 2, 8, 0);
+		cv::rectangle(frame, cv::Rect(480, 270, 960, 540), randColor[1 % CNUM], 2, 8, 0);
 
 		cv::imshow(kWinName, frame);
 	}

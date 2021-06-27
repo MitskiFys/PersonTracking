@@ -19,7 +19,7 @@ namespace pt
             this->boxes = boxes;
         }
 
-        std::map<int, cv::Rect_<float>> getMapWithBoxes()
+        std::map<int, cv::Rect_<float>>& getMapWithBoxes()
         {
             return boxes;
         }
